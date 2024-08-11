@@ -1,0 +1,12 @@
+{
+  "ModuleId": "0F660A44-761B-4D2D-21DE-967A5D86FCA0",
+  "AuthorName": "yukkeDevLab, yukke271",
+  "Version": "0.5.0",
+  "LastUpdated": "2024-08-12T05:20:00.000000",
+  "DllFileName": "VtubeStadioExtTrackingInterface.dll",
+  "DownloadUrl": "https://yukke-dev.booth.pm/",
+  "ModulePageUrl": "https://yukke-dev.booth.pm/",
+  "ModuleName": "VTubeStadioVRCFTModule",
+  "ModuleDescription": "Provides facial expression tracking when launching VTubeStadio.",
+  "UsageInstructions": "When using this module, start VTubeStadio, enable API activation, and then allow the plug-in."
+}
