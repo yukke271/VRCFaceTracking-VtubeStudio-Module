@@ -1,81 +1,89 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
 
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 using VRCFaceTracking;
 using VRCFaceTracking.Core.Params.Data;
 using VRCFaceTracking.Core.Params.Expressions;
 
-using Newtonsoft.Json;
-using System.Net.Security;
-using System.Xml;
-
 namespace VtubeStadioExtTrackingInterface
 {
     public class VtubeStadioExtTrackingInterface : ExtTrackingModule
     {
+
+        #region Constants
         private readonly string VTS_APINAME = "VTubeStudioPublicAPI";
         private readonly string VTS_APIVERSION = "1.0";
         private readonly string VTS_PluginName = "VTubeStudio2VRCFT";
         private readonly string VTS_DeveloperName = "yukkeDevLab";
 
         private readonly Uri _vtubeStudioUri = new Uri("ws://127.0.0.1:8001");
+        #endregion
+
+        #region Fields
         private ClientWebSocket _webSocket;
-
         private Request request = new Request();
-
 
         private bool isEyeTrackingActive = false;
         private bool isExpressionTrackingActive = false;
+        #endregion
 
+        #region Overrides / init, update, teardown
+
+        /// <summary>
+        /// サポートしている機能を返す
+        /// </summary>
         public override (bool SupportsEye, bool SupportsExpression) Supported => (true, true);
 
         /// <summary>
         /// モジュールの初期化処理
         /// </summary>
-        /// <param name="eyeAvailable"></param>
-        /// <param name="expressionAvailable"></param>
-        /// <returns></returns>
         public override (bool eyeSuccess, bool expressionSuccess) Initialize(bool eyeAvailable, bool expressionAvailable)
         {
             request.apiName = VTS_APINAME;
             request.apiVersion = VTS_APIVERSION;
 
             // VTSへの接続処理
-            if (!ConnectAsync().Result)
+            if (!APIConnect())
             {
                 return (false, false);
             }
-            string authToken = RequestAuthTokenAsync().Result;
+            string authToken = RequestAuthToken();
             if (authToken == "")
             {
                 return (false, false);
             }
-            var authResult = AuthenticateAsync(authToken).Result;
+            var authResult = Authenticate(authToken);
             if (!authResult)
             {
                 return (false, false);
             }
+
+            request.requestID = "TrackingDataRequestID";
+            request.messageType = "ParameterValueRequest";
 
             isEyeTrackingActive = eyeAvailable;
             isExpressionTrackingActive = expressionAvailable;
             return (eyeAvailable, expressionAvailable);
         }
 
-        // モジュールの終了処理
+        /// <summary>
+        /// モジュールの終了処理
+        /// </summary>
         public override void Teardown()
         {
             Logger.LogInformation("Teardown VtubeStadioExtTrackingInterface.");
-            DisconnectAsync();
+            APIDisconnect();
         }
 
-        // モジュールの更新処理
+        /// <summary>
+        /// モジュールの更新処理
+        /// </summary>
         public override void Update()
         {
             try
@@ -84,13 +92,13 @@ namespace VtubeStadioExtTrackingInterface
                 if (isEyeTrackingActive)
                 {
                     // 目のトラッキングデータの取得処理
-                    ReceiveEyeTrackingDataAsync(ref UnifiedTracking.Data.Eye, ref UnifiedTracking.Data.Shapes);
+                    ReceiveEyeTrackingData(ref UnifiedTracking.Data.Eye, ref UnifiedTracking.Data.Shapes);
                     // Logger.LogInformation("logging,update isEyeTrackingActive");
                 }
                 if (isExpressionTrackingActive)
                 {
                     // 表情データの取得処理
-                    ReceiveExpressionsTrackingDataAsync(ref UnifiedTracking.Data.Shapes);
+                    ReceiveExpressionsTrackingData(ref UnifiedTracking.Data.Shapes);
                     // Logger.LogInformation("logging,update isExpressionTrackingActive");
                 }
                 // Thread.Sleep(10);
@@ -104,16 +112,20 @@ namespace VtubeStadioExtTrackingInterface
             }
         }
 
-        // WSでVTubeStudioに接続する
-        // 接続できない場合でも、60秒間リトライする
-        public async Task<bool> ConnectAsync()
+        #endregion
+
+        /// <summary>
+        /// VTubeStudioとの接続処理
+        /// 5秒間隔で計60秒リトライする
+        /// </summary>
+        public bool APIConnect()
         {
             for (int i = 0; i < 12; i++)
             {
                 try
                 {
                     _webSocket = new ClientWebSocket();
-                    await _webSocket.ConnectAsync(_vtubeStudioUri, CancellationToken.None);
+                    _webSocket.ConnectAsync(_vtubeStudioUri, CancellationToken.None).Wait();
                     Logger.LogInformation("Connected to VTubeStudio at " + _vtubeStudioUri);
                     return true;
                 }
@@ -121,7 +133,7 @@ namespace VtubeStadioExtTrackingInterface
                 {
                     Logger.LogError("Failed to connect to VTubeStudio. Retrying in 5 second.");
                     Logger.LogError(e.Message);
-                    await Task.Delay(5000);
+                    Task.Delay(5000).Wait();
                 }
             }
 
@@ -135,19 +147,22 @@ namespace VtubeStadioExtTrackingInterface
             return false;
         }
 
-        // WSでVTubeStudioとの接続を切断する
-        public void DisconnectAsync()
+        /// <summary>
+        /// VTubeStudioとの接続を切断する
+        /// </summary>
+        public void APIDisconnect()
         {
             if (_webSocket.State == WebSocketState.Open)
             {
-                // await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
                 _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None).Wait();
             }
             _webSocket.Dispose();
-            // Logger.LogInformation("Disconnected from VTubeStudio.");
         }
 
-        // WSでVTubeStudioにデータを送信し、返信を待つ
+        /// <summary>
+        /// VTubeStudioにデータを送信し、返信を待つ
+        /// </summary>
+        /// <param name="message"></param>
         public async Task<string> SendAndReceiveAsync(string message)
         {
             if (_webSocket.State != WebSocketState.Open)
@@ -170,14 +185,21 @@ namespace VtubeStadioExtTrackingInterface
             return receiveMessage;
         }
 
-        // SendAndReceiveAsyncを呼び出し、結果を待って返す
+        /// <summary>
+        /// VTubeStudioにデータを送信し、返信を待つ
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
         public string SendAndReceiveAwait(string message)
         {
             return SendAndReceiveAsync(message).Result;
         }
 
-        // VTubeStadio APIの認証トークンをリクエストする 
-        public async Task<string> RequestAuthTokenAsync()
+        /// <summary>
+        /// VTubeStadio APIの認証トークンをリクエストする
+        /// </summary>
+        /// <returns></returns>
+        public string RequestAuthToken()
         {
             request.requestID = "TokenRequestID";
             request.messageType = "AuthenticationTokenRequest";
@@ -185,7 +207,7 @@ namespace VtubeStadioExtTrackingInterface
 
             // Logger.LogInformation("Requesting AuthToken..." + JsonConvert.SerializeObject(request));
 
-            var response = await SendAndReceiveAsync(JsonConvert.SerializeObject(request));
+            var response = SendAndReceiveAwait(JsonConvert.SerializeObject(request));
             if (response == null)
             {
                 Logger.LogError("Failed to get AuthToken.");
@@ -206,14 +228,16 @@ namespace VtubeStadioExtTrackingInterface
             return "";
         }
 
-        // VTuberStudioとの通信が成功した場合はtrueを返す
-        public async Task<bool> AuthenticateAsync(string authToken)
+        /// <summary>
+        /// VTubeStudioとの認証処理
+        /// </summary>
+        public bool Authenticate(string authToken)
         {
             request.requestID = "AuthenticationRequestID";
             request.messageType = "AuthenticationRequest";
             request.data = new { pluginName = VTS_PluginName, pluginDeveloper = VTS_DeveloperName, authenticationToken = authToken };
 
-            var response = await SendAndReceiveAsync(JsonConvert.SerializeObject(request));
+            var response = SendAndReceiveAwait(JsonConvert.SerializeObject(request));
             if (response == null)
             {
                 Logger.LogError("Failed to authenticate with VTubeStudio.");
@@ -232,18 +256,21 @@ namespace VtubeStadioExtTrackingInterface
             }
         }
 
-        // 目のトラッキングデータと表情データを取得する
-        // UnifiedExpressionShapeについてはこちらを参照
-        // https://docs.vrcft.io/docs/tutorial-avatars/tutorial-avatars-extras/unified-blendshapes#ue-base-shapes
-        public void ReceiveEyeTrackingDataAsync(ref UnifiedEyeData eyeData, ref UnifiedExpressionShape[] shapes)
+        /// <summary>
+        /// VTubeStudioから目のトラッキングデータを受け取る <br />
+        /// 
+        /// UnifiedExpressionShapeについてはこちらを参照 <br />
+        /// https://docs.vrcft.io/docs/tutorial-avatars/tutorial-avatars-extras/unified-blendshapes#ue-base-shapes
+        /// </summary>
+        /// <param name="eyeData"></param>
+        /// <param name="shapes"></param>
+        public void ReceiveEyeTrackingData(ref UnifiedEyeData eyeData, ref UnifiedExpressionShape[] shapes)
         {
             // 受け取るデータは鏡写しになっている様子
             // 問題があれば修正する
 
             // データの受け取り処理を並列化したら早くなりそう
-
-            request.requestID = "TrackingDataRequestID";
-            request.messageType = "ParameterValueRequest";
+            // ↑ 並列化したら、データの取得は高速化できるが、挙動がブレブレになる
 
             // 目のトラッキングデータ(right.x,right.y,left.x,left.y)、視線を取得する
             // もしかしたら向きが違う可能性
@@ -280,9 +307,6 @@ namespace VtubeStadioExtTrackingInterface
             var resJsonEyeOpenLeft = JsonConvert.DeserializeObject<dynamic>(resEyeOpenLeft);
             var eyeOpenLeft = (float)resJsonEyeOpenLeft.data.value;
 
-            // 複数のトラッキングデータを返す関数を呼び出す。
-            // float eyeRightX, eyeRightY, eyeLeftX, eyeLeftY, eyeOpenRight, eyeOpenLeft = asyncReceiveEyeTrackingData(request);
-
             // 眉の開き具合を取得する
             // 0.0 ~ 1.0の値が入る
             // 0.5で真ん中くらい
@@ -291,14 +315,6 @@ namespace VtubeStadioExtTrackingInterface
             var resBrows = SendAndReceiveAwait(JsonConvert.SerializeObject(request));
             var resJsonBrows = JsonConvert.DeserializeObject<dynamic>(resBrows);
             var brows = (float)resJsonBrows.data.value;
-
-            // Operator '-' cannot be applied to operands of type 'float' and 'Newtonsoft.Json.Linq.JValue'
-            // というエラーが出るので、floatに変換する必要がある
-            // var eyeRightXFloat = (float)eyeRightX;
-            // var eyeRightYFloat = (float)eyeRightY;
-            // var eyeLeftXFloat = (float)eyeLeftX;
-            // var eyeLeftYFloat = (float)eyeLeftY;
-            // var browsFloat = (float)brows;
 
             // 値を格納していく
             eyeData.Right.Gaze.x = eyeRightX;
@@ -340,11 +356,12 @@ namespace VtubeStadioExtTrackingInterface
 
         }
 
-        // 表情データを取得する
-        public void ReceiveExpressionsTrackingDataAsync(ref UnifiedExpressionShape[] shapes)
+        /// <summary>
+        /// VTubeStudioから表情データを受け取る
+        /// </summary>
+        /// <param name="shapes"></param>
+        public void ReceiveExpressionsTrackingData(ref UnifiedExpressionShape[] shapes)
         {
-            request.requestID = "TrackingDataRequestID";
-            request.messageType = "ParameterValueRequest";
 
             // 口の開き具合を取得する
             // request.data = new { name = "MouthOpen" };
@@ -361,70 +378,9 @@ namespace VtubeStadioExtTrackingInterface
             var resJsonMouthSmile = JsonConvert.DeserializeObject<dynamic>(resMouthSmile);
             var mouthSmile = (float)resJsonMouthSmile.data.value;
 
-            // // 唇のX座標を取得する
-            // // デフォルトは0
-            // // +-30の値が入る
-            // request.data = new { name = "FaceAngleX" };
-            // var resFaceAngleX = SendAndReceiveAwait(JsonConvert.SerializeObject(request));
-            // var resJsonFaceAngleX = JsonConvert.DeserializeObject<dynamic>(resFaceAngleX);
-            // var faceAngleX = (float)resJsonFaceAngleX.data.value;
-            // // +-20に調整する
-            // if (faceAngleX > 20)
-            // {
-            //     faceAngleX = 20;
-            // }
-            // else if (faceAngleX < -20)
-            // {
-            //     faceAngleX = -20;
-            // }
-            // if (faceAngleX == 0)
-            // {
-            //     faceAngleX = 0.00001f;
-            // }
-            // // faceAngleX = faceAngleX / 20f;
-
-            // // 唇のY座標を取得する
-            // // デフォルトは0
-            // // +-30の値が入る
-            // request.data = new { name = "FaceAngleY" };
-            // var resFaceAngleY = SendAndReceiveAwait(JsonConvert.SerializeObject(request));
-            // var resJsonFaceAngleY = JsonConvert.DeserializeObject<dynamic>(resFaceAngleY);
-            // var faceAngleY = (float)resJsonFaceAngleY.data.value;
-            // // +-20に調整する
-            // if (faceAngleY > 20)
-            // {
-            //     faceAngleY = 20;
-            // }
-            // else if (faceAngleY < -20)
-            // {
-            //     faceAngleY = -20;
-            // }
-            // if (faceAngleY == 0)
-            // {
-            //     faceAngleY = 0.00001f;
-            // }
-            // // faceAngleY = faceAngleY / 20f;
-
-            //Debug
-            // Logger.LogInformation("mouthOpen : " + mouthOpen);
-            // Logger.LogInformation("mouthSmile : " + mouthSmile);
-            // Logger.LogInformation("faceAngleX : " + faceAngleX);
-            // Logger.LogInformation("faceAngleY : " + faceAngleY);
-
             // 口を開く
             // アゴの下がり具合を設定
             shapes[(int)UnifiedExpressions.JawOpen].Weight = mouthOpen / 2;
-            // 上唇の上がり具合を設定
-            // shapes[(int)UnifiedExpressions.MouthUpperUpRight].Weight = mouthOpen / 2;
-            // shapes[(int)UnifiedExpressions.MouthUpperUpLeft].Weight = mouthOpen / 2;
-            // 下唇の下がり具合を設定
-            // shapes[(int)UnifiedExpressions.MouthLowerDownRight].Weight = mouthOpen / 2;
-            // shapes[(int)UnifiedExpressions.MouthLowerDownLeft].Weight = mouthOpen / 2;
-
-            // shapes[(int)UnifiedExpressions.JawOpen].Weight
-            // shapes[(int)UnifiedExpressions.JawLeft].Weight
-            // shapes[(int)UnifiedExpressions.JawRight].Weight
-            // shapes[(int)UnifiedExpressions.JawForward].Weight
 
             // 笑顔
             // mouthSmile = 0.0 ~ 1.0
@@ -436,75 +392,11 @@ namespace VtubeStadioExtTrackingInterface
             shapes[(int)UnifiedExpressions.MouthCornerSlantLeft].Weight = mouthSmile;
             shapes[(int)UnifiedExpressions.MouthFrownRight].Weight = mouthSmile;
             shapes[(int)UnifiedExpressions.MouthFrownLeft].Weight = mouthSmile;
-
-            // // 唇の位置
-            // if (faceAngleY > 0)
-            // {
-            //     // 上を向いている時、唇が上に引っ張られる
-            //     // 右を向いている時、左よりも右の方が上に引っ張られる
-            //     if (faceAngleX > 0)
-            //     {
-            //         shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY;
-            //         shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY / 1.5f;
-            //         shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY / 2f;
-            //         shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY / 2.5f;
-            //     }
-            //     else
-            //     {
-            //         shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY / 1.5f;
-            //         shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY;
-            //         shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY / 2.5f;
-            //         shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY / 2f;
-            //     }
-            // }
-            // else
-            // {
-            //     // 下を向いている時、唇が下に引っ張られる
-            //     // 右を向いている時、左よりも右の方が下に引っ張られる
-            //     if (faceAngleX > 0)
-            //     {
-            //         shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY;
-            //         shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY / 1.5f;
-            //         shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY / 2f;
-            //         shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY / 2.5f;
-            //     }
-            //     else
-            //     {
-            //         shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY / 1.5f;
-            //         shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY;
-            //         shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY / 2.5f;
-            //         shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY / 2f;
-            //     }
-            // }
-
-            // if (faceAngleX > 0)
-            // {
-            //     // 唇のひっぱりと、えくぼ
-            //     // 唇が右に引っ張られた場合、左にえくぼができる
-            //     shapes[(int)UnifiedExpressions.MouthStretchRight].Weight = faceAngleX;
-            //     shapes[(int)UnifiedExpressions.MouthDimpleLeft].Weight = faceAngleX;
-            // }
-            // else
-            // {
-            //     shapes[(int)UnifiedExpressions.MouthStretchLeft].Weight = faceAngleX;
-            //     shapes[(int)UnifiedExpressions.MouthDimpleRight].Weight = faceAngleX;
-            // }
-
-
         }
 
-        // 目のトラッキングデータを並列で取得する
-        // public (float, float, float, float, float, float) asyncReceiveEyeTrackingData(Request request)
-        // {
-        //     float eyeRightX, eyeRightY, eyeLeftX, eyeLeftY, eyeOpenRight, eyeOpenLeft;
-
-            
-
-        //     return (eyeRightX, eyeRightY, eyeLeftX, eyeLeftY, eyeOpenRight, eyeOpenLeft);
-        // }
-
-
-        // api呼び出し用のクラス
+        /// <summary>
+        /// VTubeStudioとのデータの送受信に使用するクラス
+        /// </summary>
         public class Request
         {
             public string apiName { get; set; }
