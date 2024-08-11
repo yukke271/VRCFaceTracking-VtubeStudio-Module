@@ -361,49 +361,49 @@ namespace VtubeStadioExtTrackingInterface
             var resJsonMouthSmile = JsonConvert.DeserializeObject<dynamic>(resMouthSmile);
             var mouthSmile = (float)resJsonMouthSmile.data.value;
 
-            // 唇のX座標を取得する
-            // デフォルトは0
-            // +-30の値が入る
-            request.data = new { name = "FaceAngleX" };
-            var resFaceAngleX = SendAndReceiveAwait(JsonConvert.SerializeObject(request));
-            var resJsonFaceAngleX = JsonConvert.DeserializeObject<dynamic>(resFaceAngleX);
-            var faceAngleX = (float)resJsonFaceAngleX.data.value;
-            // +-20に調整する
-            if (faceAngleX > 20)
-            {
-                faceAngleX = 20;
-            }
-            else if (faceAngleX < -20)
-            {
-                faceAngleX = -20;
-            }
-            if (faceAngleX == 0)
-            {
-                faceAngleX = 0.00001f;
-            }
-            // faceAngleX = faceAngleX / 20f;
+            // // 唇のX座標を取得する
+            // // デフォルトは0
+            // // +-30の値が入る
+            // request.data = new { name = "FaceAngleX" };
+            // var resFaceAngleX = SendAndReceiveAwait(JsonConvert.SerializeObject(request));
+            // var resJsonFaceAngleX = JsonConvert.DeserializeObject<dynamic>(resFaceAngleX);
+            // var faceAngleX = (float)resJsonFaceAngleX.data.value;
+            // // +-20に調整する
+            // if (faceAngleX > 20)
+            // {
+            //     faceAngleX = 20;
+            // }
+            // else if (faceAngleX < -20)
+            // {
+            //     faceAngleX = -20;
+            // }
+            // if (faceAngleX == 0)
+            // {
+            //     faceAngleX = 0.00001f;
+            // }
+            // // faceAngleX = faceAngleX / 20f;
 
-            // 唇のY座標を取得する
-            // デフォルトは0
-            // +-30の値が入る
-            request.data = new { name = "FaceAngleY" };
-            var resFaceAngleY = SendAndReceiveAwait(JsonConvert.SerializeObject(request));
-            var resJsonFaceAngleY = JsonConvert.DeserializeObject<dynamic>(resFaceAngleY);
-            var faceAngleY = (float)resJsonFaceAngleY.data.value;
-            // +-20に調整する
-            if (faceAngleY > 20)
-            {
-                faceAngleY = 20;
-            }
-            else if (faceAngleY < -20)
-            {
-                faceAngleY = -20;
-            }
-            if (faceAngleY == 0)
-            {
-                faceAngleY = 0.00001f;
-            }
-            // faceAngleY = faceAngleY / 20f;
+            // // 唇のY座標を取得する
+            // // デフォルトは0
+            // // +-30の値が入る
+            // request.data = new { name = "FaceAngleY" };
+            // var resFaceAngleY = SendAndReceiveAwait(JsonConvert.SerializeObject(request));
+            // var resJsonFaceAngleY = JsonConvert.DeserializeObject<dynamic>(resFaceAngleY);
+            // var faceAngleY = (float)resJsonFaceAngleY.data.value;
+            // // +-20に調整する
+            // if (faceAngleY > 20)
+            // {
+            //     faceAngleY = 20;
+            // }
+            // else if (faceAngleY < -20)
+            // {
+            //     faceAngleY = -20;
+            // }
+            // if (faceAngleY == 0)
+            // {
+            //     faceAngleY = 0.00001f;
+            // }
+            // // faceAngleY = faceAngleY / 20f;
 
             //Debug
             // Logger.LogInformation("mouthOpen : " + mouthOpen);
@@ -437,58 +437,58 @@ namespace VtubeStadioExtTrackingInterface
             shapes[(int)UnifiedExpressions.MouthFrownRight].Weight = mouthSmile;
             shapes[(int)UnifiedExpressions.MouthFrownLeft].Weight = mouthSmile;
 
-            // 唇の位置
-            if (faceAngleY > 0)
-            {
-                // 上を向いている時、唇が上に引っ張られる
-                // 右を向いている時、左よりも右の方が上に引っ張られる
-                if (faceAngleX > 0)
-                {
-                    shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY;
-                    shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY / 1.5f;
-                    shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY / 2f;
-                    shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY / 2.5f;
-                }
-                else
-                {
-                    shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY / 1.5f;
-                    shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY;
-                    shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY / 2.5f;
-                    shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY / 2f;
-                }
-            }
-            else
-            {
-                // 下を向いている時、唇が下に引っ張られる
-                // 右を向いている時、左よりも右の方が下に引っ張られる
-                if (faceAngleX > 0)
-                {
-                    shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY;
-                    shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY / 1.5f;
-                    shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY / 2f;
-                    shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY / 2.5f;
-                }
-                else
-                {
-                    shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY / 1.5f;
-                    shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY;
-                    shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY / 2.5f;
-                    shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY / 2f;
-                }
-            }
+            // // 唇の位置
+            // if (faceAngleY > 0)
+            // {
+            //     // 上を向いている時、唇が上に引っ張られる
+            //     // 右を向いている時、左よりも右の方が上に引っ張られる
+            //     if (faceAngleX > 0)
+            //     {
+            //         shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY;
+            //         shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY / 1.5f;
+            //         shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY / 2f;
+            //         shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY / 2.5f;
+            //     }
+            //     else
+            //     {
+            //         shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY / 1.5f;
+            //         shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY;
+            //         shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY / 2.5f;
+            //         shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY / 2f;
+            //     }
+            // }
+            // else
+            // {
+            //     // 下を向いている時、唇が下に引っ張られる
+            //     // 右を向いている時、左よりも右の方が下に引っ張られる
+            //     if (faceAngleX > 0)
+            //     {
+            //         shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY;
+            //         shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY / 1.5f;
+            //         shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY / 2f;
+            //         shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY / 2.5f;
+            //     }
+            //     else
+            //     {
+            //         shapes[(int)UnifiedExpressions.MouthLowerRight].Weight = faceAngleY / 1.5f;
+            //         shapes[(int)UnifiedExpressions.MouthLowerLeft].Weight = faceAngleY;
+            //         shapes[(int)UnifiedExpressions.MouthUpperRight].Weight = faceAngleY / 2.5f;
+            //         shapes[(int)UnifiedExpressions.MouthUpperLeft].Weight = faceAngleY / 2f;
+            //     }
+            // }
 
-            if (faceAngleX > 0)
-            {
-                // 唇のひっぱりと、えくぼ
-                // 唇が右に引っ張られた場合、左にえくぼができる
-                shapes[(int)UnifiedExpressions.MouthStretchRight].Weight = faceAngleX;
-                shapes[(int)UnifiedExpressions.MouthDimpleLeft].Weight = faceAngleX;
-            }
-            else
-            {
-                shapes[(int)UnifiedExpressions.MouthStretchLeft].Weight = faceAngleX;
-                shapes[(int)UnifiedExpressions.MouthDimpleRight].Weight = faceAngleX;
-            }
+            // if (faceAngleX > 0)
+            // {
+            //     // 唇のひっぱりと、えくぼ
+            //     // 唇が右に引っ張られた場合、左にえくぼができる
+            //     shapes[(int)UnifiedExpressions.MouthStretchRight].Weight = faceAngleX;
+            //     shapes[(int)UnifiedExpressions.MouthDimpleLeft].Weight = faceAngleX;
+            // }
+            // else
+            // {
+            //     shapes[(int)UnifiedExpressions.MouthStretchLeft].Weight = faceAngleX;
+            //     shapes[(int)UnifiedExpressions.MouthDimpleRight].Weight = faceAngleX;
+            // }
 
 
         }
